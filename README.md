@@ -1,5 +1,4 @@
 # Berti-Artifact
-
 [![DOI](https://zenodo.org/badge/518392799.svg)](https://zenodo.org/badge/latestdoi/518392799)
 
 Artifact used to evaluate the Berti prefetcher presented in the following paper:
@@ -8,6 +7,9 @@ Artifact used to evaluate the Berti prefetcher presented in the following paper:
 >"**Berti: an Accurate and Timely Local-Delta Data Prefetcher**".
 >To appear in _55th Proceedings of the International Symposium on 
 Microarchitecture_ (MICRO-55), October 2022.
+
+## Modifications
+We use several branch statistics scripts to analyze the per-branch distribution of branch prediction in ChampSim, implementing the approach with reference to BranchNet scripts.
 
 ## Overview
 
