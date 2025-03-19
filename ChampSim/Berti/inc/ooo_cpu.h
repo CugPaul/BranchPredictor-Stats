@@ -1,6 +1,8 @@
 #ifndef OOO_CPU_H
 #define OOO_CPU_H
 
+
+#include "utils.h" // added for count branch
 #include "cache.h"
 #include "page_table_walker.h"
 
@@ -17,7 +19,7 @@ using namespace std;
 #define FETCH_WIDTH 6
 #define DECODE_WIDTH 6
 #define EXEC_WIDTH 6
-#define LQ_WIDTH 2
+#define LQ_WIDTH 2 //都是执行的时候队列大小
 #define SQ_WIDTH 2
 #define RETIRE_WIDTH 4
 #define SCHEDULER_SIZE 128
@@ -151,7 +153,6 @@ class O3_CPU {
 	fetch_resume_cycle = 0;
         num_branch = 0;
         branch_mispredictions = 0;
-
        	for(uint32_t i=0; i<8; i++)
 		total_branch_types[i] = 0;
 
@@ -189,7 +190,7 @@ class O3_CPU {
     }
 
     // functions
-    void read_from_trace(),
+    void read_from_trace(Stats& stats), //分支预测在这里
 	    //handle_branch(), Neelu: Now it is read_from_trace.
          fetch_instruction(),
 	 decode_and_dispatch(),
@@ -235,7 +236,7 @@ class O3_CPU {
     // branch predictor
     uint8_t predict_branch(uint64_t ip);
     void    initialize_branch_predictor(),
-            last_branch_result(uint64_t ip, uint8_t taken); 
+            last_branch_result(uint64_t ip, uint64_t branch_target, uint8_t taken, uint8_t branch_type); 
 
      void l1i_prefetcher_initialize();
      void l1i_prefetcher_branch_operate(uint64_t ip, uint8_t branch_type, uint64_t branch_target);

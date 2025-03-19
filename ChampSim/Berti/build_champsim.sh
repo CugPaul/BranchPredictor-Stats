@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ "$#" -lt 18 ]; then
+if [ "$#" -lt 18 ]; then #less than
     echo "Illegal number of parameters"
     echo "Usage: ./build_champsim.sh [branch_pred] [l1i_pref] [l1d_pref]
     [l2c_pref] [llc_pref] [itlb_pref] [dtlb_pref] [stlb_pref] [btb_repl]
@@ -8,7 +8,7 @@ if [ "$#" -lt 18 ]; then
     [stlb_repl] [num_core] [tail_name]"
     exit 1
 fi
-
+# 这些参数依次传给它
 # ChampSim configuration
 BRANCH=$1           # branch/*.bpred
 L1I_PREFETCHER=$2   # prefetcher/*.l1i_pref
@@ -36,7 +36,7 @@ NORMAL=$(tput sgr0)
 #################################################
 
 # Sanity check
-if [ ! -f ./branch/${BRANCH}.bpred ]; then
+if [ ! -f ./branch/${BRANCH}.bpred ]; then #检查是否在存在
     echo "[ERROR] Cannot find branch predictor"
 	echo "[ERROR] Possible branch predictors from branch/*.bpred "
     find branch -name "*.bpred"
@@ -86,10 +86,11 @@ if [ ! -f ./prefetcher/${DTLB_PREFETCHER}.dtlb_pref ]; then
     exit 1
 fi
 
+# wok 好像是second TLB
 if [ ! -f ./prefetcher/${STLB_PREFETCHER}.stlb_pref ]; then
     echo "[ERROR] Cannot find STLB prefetcher"
         echo "[ERROR] Possible STLB prefetchers from prefetcher/*.stlb_pref "
-    find prefetcher -name "*.stlb_pref"
+    find prefetcher -name "*.stlb_pref" 
     exit 1
 fi
 
@@ -158,8 +159,9 @@ if ! [[ $NUM_CORE =~ $re ]] ; then
     exit 1
 fi
 
+# 多核就是改champsim.h中的核心数量
 # Check for multi-core
-if [ "$NUM_CORE" -gt "1" ]; then
+if [ "$NUM_CORE" -gt "1" ]; then #gt great than
     echo "Building multi-core ChampSim..."
     sed -i.bak 's/\<NUM_CPUS 1\>/NUM_CPUS '${NUM_CORE}'/g' inc/champsim.h
 #	sed -i.bak 's/\<DRAM_CHANNELS 1\>/DRAM_CHANNELS 2/g' inc/champsim.h
@@ -174,6 +176,7 @@ else
 fi
 echo
 
+#把这些复制到cc中进来再开始编译
 # Change prefetchers and replacement policy
 cp branch/${BRANCH}.bpred branch/branch_predictor.cc
 cp prefetcher/${L1I_PREFETCHER}.l1i_pref prefetcher/l1i_prefetcher.cc
@@ -198,15 +201,17 @@ cp replacement/${STLB_REPLACEMENT}.stlb_repl replacement/stlb_replacement.cc
 mkdir -p bin
 rm -f bin/champsim
 make clean
+# 编译器用指定的还是以前的
 if [ "$#" -eq 19 ]; then
-    make CC=${19} CCX=${19}
+    make CC=${19} CCX=${19} 
 else
     make
 fi
 
+#这里生成的是名字为champsim可执行文件 然后后面改名字了
 # Sanity check
 echo ""
-if [ ! -f bin/champsim ]; then
+if [ ! -f bin/champsim ]; then #$#表示接受的参数变量 如果为19个就执行then中的语句
     echo "${BOLD}ChampSim build FAILED!"
     echo ""
     exit 1
@@ -237,6 +242,7 @@ echo ""
 mv bin/champsim bin/${BINARY_NAME}
 
 
+# 恢复默认配置
 # Restore to the default configuration
 sed -i.bak 's/\<NUM_CPUS '${NUM_CORE}'\>/NUM_CPUS 1/g' inc/champsim.h
 #sed -i.bak 's/\<DRAM_CHANNELS 2\>/DRAM_CHANNELS 1/g' inc/champsim.h

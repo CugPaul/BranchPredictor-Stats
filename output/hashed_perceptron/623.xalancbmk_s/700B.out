@@ -1,0 +1,32 @@
+
+*** ChampSim Multicore Out-of-Order Simulator ***
+
+Warmup Instructions: 50000000
+Simulation Instructions: 200000000
+Number of CPUs: 1
+LLC sets: 2048
+LLC ways: 16
+Off-chip DRAM Size: 4096 MB Channels: 1 Width: 64-bit Data Rate: 6400 MT/s
+argv[0]: ./ChampSim/Berti/bin/hashed_perceptron-no-vberti-no-no-no-no-no-lru-lru-lru-srrip-drrip-lru-lru-lru-1core-no
+argv[1]: -warmup_instructions
+argv[2]: 50000000
+argv[3]: -simulation_instructions
+argv[4]: 200000000
+argv[5]: -traces
+argv[6]: traces/spec2k17_ten/623.xalancbmk_s-700B.champsimtrace.xz
+CPU 0 runs traces/spec2k17_ten/623.xalancbmk_s-700B.champsimtrace.xz
+.xz
+BTB has LRU replacement policy
+ITLB has LRU replacement policy
+DTLB has LRU replacement policy
+STLB has LRU replacement policy
+L1I has LRU replacement policy
+History Sets: 8
+History Ways: 16
+BERTI Size: 16
+BERTI Stride Size: 16
+L1D has LRU replacement policy
+Initialize SRRIP state for L2C
+Initialize DRRIP state for LLC
+Heartbeat CPU 0 instructions: 10000002 cycles: 3710271 heartbeat IPC: 2.69522 cumulative IPC: 2.69522 (Simulation time: 0 hr 7 min 21 sec) 
+Heartbeat CPU 0 instructions: 20000001 cycles: 7356703 heartbeat IPC: 2.74241 cumulative IPC: 2.71861 (Simulation time: 0 hr 11 min 46 sec) 

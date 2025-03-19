@@ -175,7 +175,7 @@ void O3_CPU::read_from_trace()
 					total_rob_occupancy_at_branch_mispredict += ROB.occupancy;
 		 			if(warmup_complete[cpu])
       					{
-  						fetch_stall = 1;
+  						fetch_stall = 1; //这里不太好啊 正确应该不止一个周期 
 						instrs_to_read_this_cycle = 0;
 						IFETCH_BUFFER.entry[ifetch_buffer_index].branch_mispredicted = 1;
 					}
@@ -263,7 +263,7 @@ void O3_CPU::read_from_trace()
 		bool reads_other = false;
 
 		////cout << arch_instr.instr_id <<" "<<arch_instr.ip<<" "<< arch_instr.is_branch<<" "<<arch_instr.branch_taken<<" "<<cpu<<endl;
-                for (uint32_t i=0; i<MAX_INSTR_DESTINATIONS; i++) {
+                for (uint32_t i=0; i<MAX_INSTR_DESTINATIONS; i++) { //一般是4
                     arch_instr.destination_registers[i] = current_instr.destination_registers[i];
                     arch_instr.destination_memory[i] = current_instr.destination_memory[i];
                     arch_instr.destination_virtual_address[i] = current_instr.destination_memory[i];
@@ -323,6 +323,7 @@ void O3_CPU::read_from_trace()
 
 
 		// determine what kind of branch this is, if any
+        // 写入指令指针寄存器且不读去任何其他寄存器 JMP Ox412312
 		if(!reads_sp && !reads_flags && writes_ip && !reads_other)
 		{
 			// direct jump
@@ -330,6 +331,7 @@ void O3_CPU::read_from_trace()
 			arch_instr.branch_taken = 1;
 			arch_instr.branch_type = BRANCH_DIRECT_JUMP;
 		}
+        // 写入指令指针寄存器且读取通用寄存器 JMP [rax]
 		else if(!reads_sp && !reads_flags && writes_ip && reads_other)
 		{
 			// indirect branch
@@ -337,6 +339,8 @@ void O3_CPU::read_from_trace()
 			arch_instr.branch_taken = 1;
 			arch_instr.branch_type = BRANCH_INDIRECT;
 		}
+        // 读取当前PC 写PC 读标志寄存器 
+        // 条件分支需要依赖当前的程序计数器来计算目标地址（例如相对地址跳转）。
 		else if(!reads_sp && reads_ip && !writes_sp && writes_ip && reads_flags && !reads_other)
 		{
 			// conditional branch
@@ -352,6 +356,7 @@ void O3_CPU::read_from_trace()
     			arch_instr.branch_type = BRANCH_DIRECT_CALL;
 
   		}
+        // 举例CALL [rax]
                 else if(reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && reads_other)
 		{
 			// indirect call
@@ -366,6 +371,7 @@ void O3_CPU::read_from_trace()
 			arch_instr.branch_taken = 1;
 			arch_instr.branch_type = BRANCH_RETURN;
 		}
+        //如果没有满足上述条件，但指令修改了PC寄存器，说明它仍然是一个分支指令。
 		else if(writes_ip)
 		{
 			// some other branch type that doesn't fit the above categories
@@ -378,7 +384,7 @@ void O3_CPU::read_from_trace()
 
 		if((arch_instr.is_branch == 1) && (arch_instr.branch_taken == 1))
 		{
-			arch_instr.branch_target = next_instr.ip;
+			arch_instr.branch_target = next_instr.ip; //???就这么自然？ 
 		}
 
 
@@ -405,14 +411,14 @@ void O3_CPU::read_from_trace()
 			}
 									                        // call code prefetcher every time the branch predictor is used
 			l1i_prefetcher_branch_operate(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_type, predicted_branch_target);
-
+              //这里为none 没有设置算法
 
 #ifndef PERFECT_BTB
 			if(arch_instr.branch_taken)
 			{
 					uint32_t btb_set = BTB.get_set(arch_instr.ip >> 2);
 					int btb_way = BTB.get_way(arch_instr.ip, btb_set);
-					if(btb_way == BTB_WAY)
+					if(btb_way == BTB_WAY) //没找到的意思 就返回最大值
 					{
 						BTB.sim_miss[cpu][ arch_instr.branch_type - 1]++;
 						BTB.sim_access[cpu][ arch_instr.branch_type - 1]++;
@@ -426,13 +432,13 @@ void O3_CPU::read_from_trace()
 					else
 					{
 						if(BTB.block[btb_set][btb_way].data == IFETCH_BUFFER.entry[ifetch_buffer_index].branch_target)
-						{
+						{ //如果找到且对了
 								BTB.sim_hit[cpu][ arch_instr. branch_type - 1]++;
 								BTB.sim_access[cpu][ arch_instr.branch_type - 1]++;
 								(BTB.*BTB.update_replacement_state)(cpu, btb_set, btb_way, arch_instr.ip, arch_instr.ip, 0, 0, 1);
 						}
 						else
-						{
+						{ // 如果BTB有但是不对
 							BTB.sim_miss[cpu][ arch_instr.branch_type - 1]++;
 							BTB.sim_access[cpu][ arch_instr.branch_type - 1]++;
 							if(warmup_complete[cpu])
@@ -444,7 +450,7 @@ void O3_CPU::read_from_trace()
 						}
 					}
 			}
-			else
+			else //不太懂 为什么不跳转也要维护
 			{
 				uint32_t btb_set = BTB.get_set(arch_instr.ip >> 2);
                 int btb_way = BTB.get_way(arch_instr.ip, btb_set);
@@ -458,9 +464,6 @@ void O3_CPU::read_from_trace()
 			}
 
 #endif
-
-
-
 
 
 			if(IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken != branch_prediction)
@@ -484,7 +487,7 @@ void O3_CPU::read_from_trace()
 					instrs_to_read_this_cycle = 0;
 				}
 			}
-
+            //更新预测器
 			last_branch_result(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken);
 			}
 
@@ -698,10 +701,9 @@ uint32_t O3_CPU::check_rob(uint64_t instr_id)
 void O3_CPU::fetch_instruction()
 {
     // TODO: can we model wrong path execusion?
-
-	
   // if we had a branch mispredict, turn fetching back on after the branch mispredict penalty
   ////////cout <<"prev, fetch_stall="<<fetch_stall<<" "<<current_core_cycle[cpu]<<" "<<fetch_resume_cycle<<endl;
+  // 应该是每一次暂停有一个fetch_resume_cycle 恢复周期数
   if((fetch_stall == 1) && (current_core_cycle[cpu] >= fetch_resume_cycle) && (fetch_resume_cycle != 0))
     {
 	   ////cout<<"fetch_resume at "<< fetch_resume_cycle<<" " ;
@@ -717,7 +719,10 @@ void O3_CPU::fetch_instruction()
 	}
 
 	//Neelu: From IFETCH buffer, requests will be sent to L1-I and it will take care of sending the translation request to ITLB as L1 caches are VIPT in this version. 
-
+    // 由于程序中的PC是虚拟地址，而实际访问存储器时需要使用物理地址，所以F1阶段的主要任务是访问TLB 
+    // IFETCH存的是虚拟地址 要去ICACHE中取数据 （涉及TLB和cache的并行访问）
+    // VLPT最后就输出cache中数据 不是物理地址 直接同步进行判断了 查TLB和cache
+    // 但是这一块没看懂为什么是Ibuffer往Icache里面送
 	uint32_t index = IFETCH_BUFFER.head;
 	for(uint32_t i=0; i<IFETCH_BUFFER.SIZE; i++)
 	{
@@ -726,7 +731,7 @@ void O3_CPU::fetch_instruction()
 			break;
 		}
 
-		if((IFETCH_BUFFER.entry[index].fetched == 0))
+		if((IFETCH_BUFFER.entry[index].fetched == 0))//还没有被获取
 		{
 			// add it to the L1-I's read queue
 			PACKET fetch_packet;
@@ -735,7 +740,7 @@ void O3_CPU::fetch_instruction()
 			fetch_packet.fill_level = FILL_L1;
 			fetch_packet.fill_l1i = 1;
 			fetch_packet.cpu = cpu;
-			fetch_packet.address = IFETCH_BUFFER.entry[index].ip >> 6;
+			fetch_packet.address = IFETCH_BUFFER.entry[index].ip >> 6; // 地址对齐到缓存行？ gpt
 			fetch_packet.full_addr = IFETCH_BUFFER.entry[index].ip;
 			fetch_packet.full_virtual_address = IFETCH_BUFFER.entry[index].ip;
 			fetch_packet.instr_id = 0;
@@ -748,12 +753,12 @@ void O3_CPU::fetch_instruction()
 			fetch_packet.asid[1] = 0;
 			fetch_packet.event_cycle = current_core_cycle[cpu];
 
-			int rq_index = L1I.add_rq(&fetch_packet);
+			int rq_index = L1I.add_rq(&fetch_packet); //我猜这个是取数据（虚实转换了） 返回了一个index
 
-			if(rq_index != -2)
+			if(rq_index != -2) //表明cache取到了
 			{
 				// mark all instructions from this cache line as having been fetched
-				for(uint32_t j=0; j<IFETCH_BUFFER.SIZE; j++)
+				for(uint32_t j=0; j<IFETCH_BUFFER.SIZE; j++) //更新同一缓存行的指令状态 gpt
 				{
 					if(((IFETCH_BUFFER.entry[j].ip)>>6) == ((IFETCH_BUFFER.entry[index].ip)>>6))
 					{
@@ -800,7 +805,7 @@ void O3_CPU::fetch_instruction()
 				DECODE_BUFFER.entry[decode_index].event_cycle = 0;
 
 				ooo_model_instr empty_entry;
-				IFETCH_BUFFER.entry[IFETCH_BUFFER.head] = empty_entry;
+				IFETCH_BUFFER.entry[IFETCH_BUFFER.head] = empty_entry; //清空IFETCH_BUFFER
 				IFETCH_BUFFER.head++;
 				if(IFETCH_BUFFER.head >= IFETCH_BUFFER.SIZE)
 				{
@@ -1013,45 +1018,48 @@ void O3_CPU::decode_and_dispatch()
 		  {
 			  break;
 		  }
-
+          // 不太懂这个if 是不是这里这些指令可以得出地址了 先放到BTB中 而间接要后面才得出 我靠 还真是
 		  if(((!warmup_complete[cpu]) && (ROB.occupancy < ROB.SIZE)) || ((DECODE_BUFFER.entry[DECODE_BUFFER.head].event_cycle != 0) && (DECODE_BUFFER.entry[DECODE_BUFFER.head].event_cycle < current_core_cycle[cpu]) && (ROB.occupancy < ROB.SIZE)))
 		  {
+            // DECODE_BUFFER.entry[DECODE_BUFFER.head].event_cycle < current_core_cycle[cpu] 说明这个解码已经完成了 当前处理器时钟超过了解码应该完成的时间
+            // 解码完成就可以放ROB了 搞不懂为什么在这里更新 在这个阶段还不能知道预测是不是对的啊
 			if(DECODE_BUFFER.entry[DECODE_BUFFER.head].btb_miss == 1 && DECODE_BUFFER.entry[DECODE_BUFFER.head].branch_mispredicted == 0)
-		{
-			uint8_t branch_type = DECODE_BUFFER.entry[DECODE_BUFFER.head].branch_type;
-			if(branch_type == BRANCH_DIRECT_JUMP || branch_type == BRANCH_DIRECT_CALL || (branch_type == BRANCH_CONDITIONAL))
-			{
-				if(warmup_complete[cpu])
-				{
-					fetch_resume_cycle = current_core_cycle[cpu] + 1; //Resume fetch from next cycle.
-				}
-				DECODE_BUFFER.entry[DECODE_BUFFER.head].btb_miss = 0;
-				//if(branch_type == BRANCH_CONDITIONAL)
-				//assert(DECODE_BUFFER.entry[DECODE_BUFFER.head].ip + 4 != DECODE_BUFFER.entry[DECODE_BUFFER.head].branch_target);		
-				fill_btb(DECODE_BUFFER.entry[DECODE_BUFFER.head].ip, DECODE_BUFFER.entry[DECODE_BUFFER.head].branch_target);		
-			}
-		}
+            {
+                uint8_t branch_type = DECODE_BUFFER.entry[DECODE_BUFFER.head].branch_type;
+                // 其他间接跳转类型btb的命中率较低 难以预测 填充意义不大
+                if(branch_type == BRANCH_DIRECT_JUMP || branch_type == BRANCH_DIRECT_CALL || (branch_type == BRANCH_CONDITIONAL))
+                {
+                    if(warmup_complete[cpu])
+                    {
+                        fetch_resume_cycle = current_core_cycle[cpu] + 1; //Resume fetch from next cycle. //恢复 一周期
+                    }
+                    DECODE_BUFFER.entry[DECODE_BUFFER.head].btb_miss = 0;
+                    //if(branch_type == BRANCH_CONDITIONAL)
+                    //assert(DECODE_BUFFER.entry[DECODE_BUFFER.head].ip + 4 != DECODE_BUFFER.entry[DECODE_BUFFER.head].branch_target);		
+                    fill_btb(DECODE_BUFFER.entry[DECODE_BUFFER.head].ip, DECODE_BUFFER.entry[DECODE_BUFFER.head].branch_target);		
+                }
+            }
 
+            // move this instruction to the ROB if there's space
+            uint32_t rob_index = add_to_rob(&DECODE_BUFFER.entry[DECODE_BUFFER.head]);
+            ROB.entry[rob_index].event_cycle = current_core_cycle[cpu];
 
-			  // move this instruction to the ROB if there's space
-			uint32_t rob_index = add_to_rob(&DECODE_BUFFER.entry[DECODE_BUFFER.head]);
-			ROB.entry[rob_index].event_cycle = current_core_cycle[cpu];
+            ooo_model_instr empty_entry;
+            DECODE_BUFFER.entry[DECODE_BUFFER.head] = empty_entry;
 
-			ooo_model_instr empty_entry;
-			DECODE_BUFFER.entry[DECODE_BUFFER.head] = empty_entry;
+            DECODE_BUFFER.head++;
+            if(DECODE_BUFFER.head >= DECODE_BUFFER.SIZE)
+            {
+                DECODE_BUFFER.head = 0;
+            }
+            DECODE_BUFFER.occupancy--;
 
-			DECODE_BUFFER.head++;
-			if(DECODE_BUFFER.head >= DECODE_BUFFER.SIZE)
-			{
-				DECODE_BUFFER.head = 0;
-			}
-			DECODE_BUFFER.occupancy--;
+            count_dispatches++;
+            if(count_dispatches >= DECODE_WIDTH)
+            {
+                break;
+            }
 
-			count_dispatches++;
-			if(count_dispatches >= DECODE_WIDTH)
-			{
-				break;
-			}
 		  }
 		  else
 		  {
@@ -1069,7 +1077,7 @@ void O3_CPU::decode_and_dispatch()
 		{
 			break;
 		}
-
+        //如果当前条目还未分配事件周期，说明该指令尚未开始解码
   		if(DECODE_BUFFER.entry[decode_index].event_cycle == 0)
   		{
 			// apply decode latency
@@ -1149,16 +1157,17 @@ int O3_CPU::prefetch_code_line(uint64_t pf_v_addr)
 // III. Instruction is retired
 void O3_CPU::schedule_instruction()
 {
+    // ROB虽然顺序存储 但是乱序执行是看到操作数准备好了就发射 所以轮训
     if ((ROB.head == ROB.tail) && ROB.occupancy == 0)
         return;
 
     // execution is out-of-order but we have an in-order scheduling algorithm to detect all RAW dependencies
-    uint32_t limit = ROB.next_fetch[1];
+    uint32_t limit = ROB.next_fetch[1]; //？？
     ////DP ( if (warmup_complete[cpu]) {	//*******************************************************************************************
       //          //cout << "Entered schedule_instruction() with instr id:"<< ROB.entry[limit].instr_id << endl; });
     num_searched = 0;
     if (ROB.head < limit) {
-        for (uint32_t i=ROB.head; i<limit; i++) { 
+        for (uint32_t i=ROB.head; i<limit; i++) { // SCHEDULER_SIZE 128  //ROB环形缓冲区的两种布局情况 额 逐个检查来进行调度
             if ((ROB.entry[i].fetched != COMPLETED) || (ROB.entry[i].event_cycle > current_core_cycle[cpu]) || (num_searched >= SCHEDULER_SIZE))
                 return;
 
@@ -1196,24 +1205,27 @@ void O3_CPU::do_scheduling(uint32_t rob_index)
 {
     ROB.entry[rob_index].reg_ready = 1; // reg_ready will be reset to 0 if there is RAW dependency 
 
-    reg_dependency(rob_index);
+    reg_dependency(rob_index); //如果非内存指令存在数据依赖也执行调度吗？
+    // 是的 他这个dependency就可以记录下映射关系 可以很快完成 然后不影响调度？
+    // 怎么说呢 
     ROB.next_schedule = (rob_index == (ROB.SIZE - 1)) ? 0 : (rob_index + 1);
 
-    if (ROB.entry[rob_index].is_memory)
-        ROB.entry[rob_index].scheduled = INFLIGHT;
+    if (ROB.entry[rob_index].is_memory) //检查该指令是否为内存指令 
+        ROB.entry[rob_index].scheduled = INFLIGHT; //调度就正在进行
     else {
-        ROB.entry[rob_index].scheduled = COMPLETED;
+        ROB.entry[rob_index].scheduled = COMPLETED; //非内存指令调度就完了 我草 为什么 懂了 因为这个函数就是在实现调度非内存指令
 
-        // ADD LATENCY
+        // ADD LATENCY Tomasulo算法 
         if (ROB.entry[rob_index].event_cycle < current_core_cycle[cpu])
             ROB.entry[rob_index].event_cycle = current_core_cycle[cpu] + SCHEDULING_LATENCY;
         else
-            ROB.entry[rob_index].event_cycle += SCHEDULING_LATENCY;
+            ROB.entry[rob_index].event_cycle += SCHEDULING_LATENCY;  // 仲裁 唤醒什么的这些东西！
+         // 考虑这些七里八里都算一个相同周期消耗调度时间 反正没考虑具体哪个指令要先执行哪个后
 
         if (ROB.entry[rob_index].reg_ready) {
 
 #ifdef SANITY_CHECK
-            if (RTE1[RTE1_tail] < ROB_SIZE)
+            if (RTE1[RTE1_tail] < ROB_SIZE) //将当前指令的 ROB 索引添加到 Ready-To-Execute 队列
                 assert(0);
 #endif
             // remember this rob_index in the Ready-To-Execute array 1
@@ -1255,28 +1267,29 @@ void O3_CPU::reg_dependency(uint32_t rob_index)
     if (rob_index != ROB.head) {
         if ((int)ROB.head <= prior) {
             for (int i=prior; i>=(int)ROB.head; i--) if (ROB.entry[i].executed != COMPLETED) {
-		for (uint32_t j=0; j<NUM_INSTR_SOURCES; j++) {
-			if (ROB.entry[rob_index].source_registers[j] && (ROB.entry[rob_index].reg_RAW_checked[j] == 0))
-				reg_RAW_dependency(i, rob_index, j);
-		}
+                for (uint32_t j=0; j<NUM_INSTR_SOURCES; j++) {
+                    if (ROB.entry[rob_index].source_registers[j] && (ROB.entry[rob_index].reg_RAW_checked[j] == 0))
+                        reg_RAW_dependency(i, rob_index, j);
+                }
 	    }
         } else {
             for (int i=prior; i>=0; i--) if (ROB.entry[i].executed != COMPLETED) {
-		for (uint32_t j=0; j<NUM_INSTR_SOURCES; j++) {
-			if (ROB.entry[rob_index].source_registers[j] && (ROB.entry[rob_index].reg_RAW_checked[j] == 0))
-				reg_RAW_dependency(i, rob_index, j);
-		}
+                for (uint32_t j=0; j<NUM_INSTR_SOURCES; j++) {
+                    if (ROB.entry[rob_index].source_registers[j] && (ROB.entry[rob_index].reg_RAW_checked[j] == 0))
+                        reg_RAW_dependency(i, rob_index, j);
+                }
 	    }
             for (int i=ROB.SIZE-1; i>=(int)ROB.head; i--) if (ROB.entry[i].executed != COMPLETED) {
-		for (uint32_t j=0; j<NUM_INSTR_SOURCES; j++) {
-			if (ROB.entry[rob_index].source_registers[j] && (ROB.entry[rob_index].reg_RAW_checked[j] == 0))
-				reg_RAW_dependency(i, rob_index, j);
-		}
+                for (uint32_t j=0; j<NUM_INSTR_SOURCES; j++) {
+                    if (ROB.entry[rob_index].source_registers[j] && (ROB.entry[rob_index].reg_RAW_checked[j] == 0))
+                        reg_RAW_dependency(i, rob_index, j);
+                }
 	    }
         }
     }
 }
 
+// 就是记录一些依赖关系
 void O3_CPU::reg_RAW_dependency(uint32_t prior, uint32_t current, uint32_t source_index)
 {
     for (uint32_t i=0; i<MAX_INSTR_DESTINATIONS; i++) {
@@ -1290,7 +1303,7 @@ void O3_CPU::reg_RAW_dependency(uint32_t prior, uint32_t current, uint32_t sourc
             ROB.entry[prior].registers_index_depend_on_me[source_index].insert (current);   // this load cannot be executed until the prior store gets executed
             ROB.entry[prior].reg_RAW_producer = 1;
 
-            ROB.entry[current].reg_ready = 0;
+            ROB.entry[current].reg_ready = 0; //就检查写后读依赖
             ROB.entry[current].producer_id = ROB.entry[prior].instr_id; 
             ROB.entry[current].num_reg_dependent++;
             ROB.entry[current].reg_RAW_checked[source_index] = 1;
@@ -1410,7 +1423,7 @@ void O3_CPU::schedule_memory_instruction()
                 break;
 
             if (ROB.entry[i].is_memory && ROB.entry[i].reg_ready && (ROB.entry[i].scheduled == INFLIGHT))
-                do_memory_scheduling(i);
+                do_memory_scheduling(i); //没有存储依赖
         }
     }
     else {
@@ -2142,7 +2155,7 @@ void O3_CPU::complete_execution(uint32_t rob_index)
                 reg_RAW_release(rob_index);
 
             if (ROB.entry[rob_index].branch_mispredicted)
-	      	{
+	      	{ //分支错误在这里才恢复？ 差不多 执行完才知道对不对
 				if(warmup_complete[cpu])
 				{
 					fetch_resume_cycle = current_core_cycle[cpu] + 1;
@@ -2162,6 +2175,7 @@ void O3_CPU::complete_execution(uint32_t rob_index)
                 	fetch_resume_cycle = current_core_cycle[cpu] + 1; //Resume fetch from next cycle.
 				}
 				fill_btb(ROB.entry[rob_index].ip, ROB.entry[rob_index].branch_target);
+                // 这么看间接call等也存BTB啊 怎么感觉return也会进去
         	}
 
 

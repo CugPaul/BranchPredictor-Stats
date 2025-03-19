@@ -12,8 +12,8 @@
 
 // special registers that help us identify branches
 #define REG_STACK_POINTER 6
-#define REG_FLAGS 25
-#define REG_INSTRUCTION_POINTER 26
+#define REG_FLAGS 25         //可能是编号 不是个数
+#define REG_INSTRUCTION_POINTER 26 //PC寄存器
 
 // branch types
 #define NOT_BRANCH           0

@@ -50,7 +50,7 @@ NC=$'\e[0m'
 #                           Auxiliary functions                              #
 ################################################################################
 run_command () 
-{
+{  
     # Run command 
     if [[ "$VERBOSE" == "Y" ]]; then
         # Without stdout/stderr redirect
@@ -62,7 +62,6 @@ run_command ()
         # With stdout/stderr redirect
         $1 >/dev/null 2>&1
     fi
-    
     # Command error
     if [ $? -ne 0 ]; then
         echo " ${RED}ERROR${NC}"
@@ -116,7 +115,7 @@ run_compile ()
     # Build ChampSim with the given prefetcher
     if [[ "$GCC" == "Y" ]]; then
         # Use GCC building from scratch
-        run_command "$1 $CCX"
+        run_command "$1 $CCX" #示一个整体传入
     elif [[ "$DOCKER" == "Y" ]]; then
         # Use Docker GCC
         if [[ "$VERBOSE" == "Y" ]]; then
@@ -229,19 +228,20 @@ chmod +x ChampSim/Other_PF/*.sh
     
 echo ""
 
-# Build GCC 7.5.0 from scratch
+# Build GCC 7.5.0 from scratch 
+# 如果没有就下载GCC 有的话就不用
 if [[ "$GCC" == "Y" ]]; then
     echo -n "Building GCC 7.5 from scratch..."
 
-    if [[ "$VERBOSE" == "Y" ]]; then
+    if [[ "$VERBOSE" == "Y" ]]; then # 详细模式
         ./compile_gcc.sh $PARALLEL $NUM_THREAD
-    elif [[ "$LOGGED" == "Y" ]]; then
+    elif [[ "$LOGGED" == "Y" ]]; then # 日志模式 
         ./compile_gcc.sh $PARALLEL $NUM_THREAD >> $LOG 2>&1
-    else
+    else #啥也没有模式 啥也不输出模式 log纯纯摆设
         ./compile_gcc.sh $PARALLEL $NUM_THREAD >/dev/null 2>&1
     fi
 
-    echo " ${GREEN}done${NC}"
+    echo " ${GREEN}done${NC}" #NC 恢复终端的默认颜色
     CCX=$(pwd)/gcc7.5/gcc-7.5.0/bin/bin/g++
 fi
 
@@ -255,12 +255,12 @@ if [[ "$LOGGED" == "Y" ]]; then
     echo "============================================================" >> $LOG
 fi
 
-if [ ! -d "$TRACES_SPEC" ] || [ "$DOWNLOAD" == "Y" ]; then
+if [ ! -d "$TRACES_SPEC" ] || [ "$DOWNLOAD" == "Y" ]; then #如果trace不存在 或者强制命令下载
     ./download_spec2k17.sh $TRACES_SPEC
 fi
 
 #----------------------------------------------------------------------------#
-#                                Build ChampSim                              #
+#   这一段靠make给build好生成可执行文件  Build ChampSim                        #
 #----------------------------------------------------------------------------#
 if [[ "$BUILD" == "Y" ]]; then
     if [[ "$LOGGED" == "Y" ]]; then
@@ -271,7 +271,8 @@ if [[ "$BUILD" == "Y" ]]; then
     echo -n "Building Berti..."
     cd $BERTI
     run_compile "./build_champsim.sh hashed_perceptron no vberti no no no no no\
-            lru lru lru srrip drrip lru lru lru 1 no"
+            lru lru lru srrip drrip lru lru lru 1 no"  #打引号表示一个整体传入
+    echo -n "Building Berti2..."
     cd $DIR
     
     # Build MLOP, IPCP and IP Stride
@@ -357,7 +358,7 @@ if [[ "$BUILD" == "Y" ]]; then
 fi
 
 #----------------------------------------------------------------------------#
-#                                Running Simulations                         #
+#       这里才是执行                         Running Simulations                         #
 #----------------------------------------------------------------------------#
 mkdir $OUT > /dev/null 2>&1
 
@@ -381,7 +382,7 @@ for i in $(ls $BERTI/bin/*1core*); do
     OUT=$OUT_BASE/spec2k17
     aux=$i
     mkdir $OUT > /dev/null 2>&1
-    file_trace $i $TRACES_SPEC $name >> tmp_par.out
+    file_trace $i $TRACES_SPEC $name >> tmp_par.out #后面几个都是传递给file_trace的参数 这一句就是调用命令跑起来了 具体命令在tmp_par中
 
     if [[ "$FULL" == "Y" ]]; then
         OUT=$OUT_BASE/gap

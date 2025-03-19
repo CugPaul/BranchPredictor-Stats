@@ -81,19 +81,19 @@ int history_lengths[NTABLES] = { 0, 3, 4, 6, 8, 10, 14, 19, 26, 36, 49, 67, 91, 
 
 // this many 12-bit words will be kept in the global history
 
-#define NGHIST_WORDS	(MAXHIST/LOG_TABLE_SIZE+1)
+#define NGHIST_WORDS	(MAXHIST/LOG_TABLE_SIZE+1)  // 232个历史 12个长度为一个索引 需要18个
 
 // tables of 8-bit weights
 
-int tables[NUM_CPUS][NTABLES][TABLE_SIZE];
+int tables[NUM_CPUS][NTABLES][TABLE_SIZE]; //16,4096 每个表中12位作为索引  //就这个是64KB
 
 // words that store the global history
 
-unsigned int ghist_words[NUM_CPUS][NGHIST_WORDS];
+unsigned int ghist_words[NUM_CPUS][NGHIST_WORDS]; //18
 
 // remember the indices into the tables from prediction to update
 
-unsigned int indices[NUM_CPUS][NTABLES];
+unsigned int indices[NUM_CPUS][NTABLES]; //16
 
 // initialize theta to something reasonable, 
 int 
@@ -119,6 +119,7 @@ void O3_CPU::initialize_branch_predictor () {
 	for (int i=0; i<NUM_CPUS; i++) theta[i] = 10;
 }
 
+// 注释 例子 如果最大长度是100的话 就根据前面历史的划分值 依次计算0 算一次 0-3算一次 0-4算一次 这些一直到0-100然后加起来输出值
 uint8_t O3_CPU::predict_branch(uint64_t pc) {
 
 	// initialize perceptron sum
@@ -148,7 +149,7 @@ uint8_t O3_CPU::predict_branch(uint64_t pc) {
 		// XOR up to the next-to-the-last word
 
 		int j;
-		for (j=0; j<most_words; j++) x ^= ghist_words[cpu][j];
+		for (j=0; j<most_words; j++) x ^= ghist_words[cpu][j]; // 要一路异或过来！
 
 		// XOR in the last word
 
@@ -173,7 +174,7 @@ uint8_t O3_CPU::predict_branch(uint64_t pc) {
 	return yout[cpu] >= 1;
 }
 
-void O3_CPU::last_branch_result(uint64_t pc, uint8_t taken) {
+void O3_CPU::last_branch_result(uint64_t ip, uint64_t branch_target, uint8_t taken, uint8_t branch_type) {
 
 	// was this prediction correct?
 
@@ -181,7 +182,8 @@ void O3_CPU::last_branch_result(uint64_t pc, uint8_t taken) {
 
 	// insert this branch outcome into the global history
 
-	bool b = taken;
+	bool b = taken; 
+    // 历史先放到0-12中第一个表 然后
 	for (int i=0; i<NGHIST_WORDS; i++) {
 
 		// shift b into the lsb of the current word
@@ -191,8 +193,8 @@ void O3_CPU::last_branch_result(uint64_t pc, uint8_t taken) {
 
 		// get b as the previous msb of the current word
 
-		b = !!(ghist_words[cpu][i] & TABLE_SIZE);
-		ghist_words[cpu][i] &= TABLE_SIZE-1;
+		b = !!(ghist_words[cpu][i] & TABLE_SIZE); //4096异或 4096是100000000000000000000 他这是提取最高位的进位 进位 左移进位了就得给新的去
+		ghist_words[cpu][i] &= TABLE_SIZE-1; //4095 再取低12位
 	}
 
 	// get the magnitude of yout
@@ -200,7 +202,7 @@ void O3_CPU::last_branch_result(uint64_t pc, uint8_t taken) {
 	int a = (yout[cpu] < 0) ? -yout[cpu] : yout[cpu];
 
 	// perceptron learning rule: train if misprediction or weak correct prediction
-
+    // 只在预测错误的时候训练
 	if (!correct || a < theta[cpu]) {
 		// update weights
 		for (int i=0; i<NTABLES; i++) {

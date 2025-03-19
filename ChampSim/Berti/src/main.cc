@@ -368,7 +368,7 @@ void print_branch_stats()
 {
     for (uint32_t i=0; i<NUM_CPUS; i++) {
         cout << endl << "CPU " << i << " Branch Prediction Accuracy: ";
-        cout << (100.0*(ooo_cpu[i].num_branch - ooo_cpu[i].branch_mispredictions)) / ooo_cpu[i].num_branch;
+        cout << (100.0*(ooo_cpu[i].num_branch - ooo_cpu[i].branch_mispredictions)) / ooo_cpu[i].num_branch; //改为仅计算条件分支
         cout << "% MPKI: " << (1000.0*ooo_cpu[i].branch_mispredictions)/(ooo_cpu[i].num_retired - ooo_cpu[i].warmup_instructions);
 	cout << " Average ROB Occupancy at Mispredict: " << (1.0*ooo_cpu[i].total_rob_occupancy_at_branch_mispredict)/ooo_cpu[i].branch_mispredictions << endl;
 
@@ -1061,7 +1061,7 @@ int main(int argc, char** argv)
     cout << "Simulation Instructions: " << simulation_instructions << endl;
     //cout << "Scramble Loads: " << (knob_scramble_loads ? "ture" : "false") << endl;
     cout << "Number of CPUs: " << NUM_CPUS << endl;
-    cout << "LLC sets: " << LLC_SET << endl;
+    cout << "LLC sets: " << LLC_SET << endl; //来自cache.h
     cout << "LLC ways: " << LLC_WAY << endl;
 #ifdef CAPTURE_DYNAMIC_ENERGY_PROFILE
     cout << "PHASE_SIZE_IN_CYCLES: " << PHASE_SIZE_IN_CYCLES << endl;
@@ -1082,8 +1082,9 @@ int main(int argc, char** argv)
     // default: 16 = (64 / 8) * (3200 / 1600)
     // it takes 16 CPU cycles to tranfser 64B cache block on a 8B (64-bit) bus 
     // note that dram burst length = BLOCK_SIZE/DRAM_CHANNEL_WIDTH
+    // 因为dram走一个cycle cpu可以走两个cycle
     DRAM_DBUS_RETURN_TIME = (BLOCK_SIZE / DRAM_CHANNEL_WIDTH) * (CPU_FREQ / DRAM_MTPS);
-
+    // Dram一次可以走64bit数据  MT表示每秒可以6400Millon次数据传输
     printf("Off-chip DRAM Size: %u MB Channels: %u Width: %u-bit Data Rate: %u MT/s\n",
             DRAM_SIZE, DRAM_CHANNELS, 8*DRAM_CHANNEL_WIDTH, DRAM_MTPS);
 
@@ -1092,10 +1093,13 @@ int main(int argc, char** argv)
     // search through the argv for "-traces"
     int found_traces = 0;
     int count_traces = 0;
-    
+
+    std::string input1 = argv[6];
     for (int i=0; i<argc; i++) {	    
         if (found_traces) {
-        	
+            for (int i = 0; i < argc; i++) {
+                printf("argv[%d]: %s\n", i, argv[i]); //这句话怎么没输出
+            }
             printf("CPU %d runs %s\n", count_traces, argv[i]);
 
 	    //@Vasudha: Perfect DTLB Prefetcher - read dumped page table
@@ -1105,7 +1109,7 @@ int main(int argc, char** argv)
 
             char *full_name = ooo_cpu[count_traces].trace_string,
                  *last_dot = strrchr(ooo_cpu[count_traces].trace_string, '.');
-		cout << last_dot << endl;
+		cout << last_dot << endl; 
 			ifstream test_file(full_name);
 			if(!test_file.good()){
 				printf("TRACE FILE DOES NOT EXIST\n");
@@ -1124,7 +1128,7 @@ int main(int argc, char** argv)
 
             char *pch[100];
             int count_str = 0;
-            pch[0] = strtok (argv[i], " /,.-");
+            pch[0] = strtok (argv[i], " /,.-");  //分割命令行中每个参数的字符串 
             while (pch[count_str] != NULL) {
                 //printf ("%s %d\n", pch[count_str], count_str);
                 count_str++;
@@ -1136,7 +1140,7 @@ int main(int argc, char** argv)
 
             int j = 0;
             while (pch[count_str-3][j] != '\0') {
-                seed_number += pch[count_str-3][j];
+                seed_number += pch[count_str-3][j]; //啥意思 不太懂
                 //printf("%c %d %d\n", pch[count_str-3][j], j, seed_number);
                 j++;
             }
@@ -1153,50 +1157,49 @@ int main(int argc, char** argv)
                 assert(0);
             }
         }
-        else if(strcmp(argv[i],"-traces") == 0) {
+        else if(strcmp(argv[i],"-traces") == 0) { //如果相等 才会==0
             found_traces = 1;
         }
 	/* Below code is required so that, further arguements are not treated as tracefile */
- 	if(i+1<argc && (strcmp(argv[i+1], "-context_switch") == 0 || strcmp(argv[i+1], "-s") == 0))
-	{
-		found_traces = 0;
-		knob_context_switch = 1;
-		cout << "knob on" << endl;
-	}
+        if(i+1<argc && (strcmp(argv[i+1], "-context_switch") == 0 || strcmp(argv[i+1], "-s") == 0))
+        {
+            found_traces = 0;
+            knob_context_switch = 1;
+            cout << "knob on" << endl;
+        }
     }
     
     if(knob_context_switch == 1)
     {
-	     
-//	for(int i=0; i<count_traces; i++)
-//	{
-	sprintf(context_switch_string, "%s", argv[argc-1]);
-	
-	ifstream test_file(context_switch_string);
-	if(!test_file.good()){
-		printf("CONTEXT SWITCH FILE DOES NOT EXIST\n");
-		assert(false);
-	}
-	else
-		cout << "CONTEXT SWITCH FILE EXIST\n";
-	        //ooo_cpu[i].context_switch_file = popen(ooo_cpu[i].context_switch_string, "r");
-	context_switch_file = fopen(context_switch_string, "r");
+        //	for(int i=0; i<count_traces; i++)
+        //	{
+            sprintf(context_switch_string, "%s", argv[argc-1]);
+            
+            ifstream test_file(context_switch_string);
+            if(!test_file.good()){
+                printf("CONTEXT SWITCH FILE DOES NOT EXIST\n");
+                assert(false);
+            }
+            else
+                cout << "CONTEXT SWITCH FILE EXIST\n";
+                    //ooo_cpu[i].context_switch_file = popen(ooo_cpu[i].context_switch_string, "r");
+            context_switch_file = fopen(context_switch_string, "r");
 
-	if (context_switch_file == NULL) {
-        	printf("\n*** Context switch file not found: %s ***\n\n", argv[argc-1]);
-                assert(0);
-        }
-	else
-		cout << "Context_switch file found\n\n" ;
-        index=0;
-	while((fscanf(context_switch_file, "%ld %d %d", &cs_file[index].cycle, &cs_file[index].swap_cpu[0], &cs_file[index].swap_cpu[1]))!=EOF)
-	{
-		cs_file[index].index = index;
-		cout << "print file:" << cs_file[index].index << " " << cs_file[index].cycle <<"- "<<  cs_file[index].swap_cpu[0] << cs_file[index].swap_cpu[1] <<  endl;
-		index++;
-	}
-	
-//	}
+            if (context_switch_file == NULL) {
+                    printf("\n*** Context switch file not found: %s ***\n\n", argv[argc-1]);
+                        assert(0);
+                }
+            else
+                cout << "Context_switch file found\n\n" ;
+                index=0;
+            while((fscanf(context_switch_file, "%ld %d %d", &cs_file[index].cycle, &cs_file[index].swap_cpu[0], &cs_file[index].swap_cpu[1]))!=EOF)
+            {
+                cs_file[index].index = index;
+                cout << "print file:" << cs_file[index].index << " " << cs_file[index].cycle <<"- "<<  cs_file[index].swap_cpu[0] << cs_file[index].swap_cpu[1] <<  endl;
+                index++;
+            }
+            
+        //	}
     }
 
     if (count_traces != NUM_CPUS) {
@@ -1232,32 +1235,42 @@ int main(int argc, char** argv)
         ooo_cpu[i].BTB.update_replacement_state = &CACHE::btb_update_replacement_state;
         ooo_cpu[i].BTB.find_victim = &CACHE::btb_find_victim;
         ooo_cpu[i].BTB.replacement_final_stats = &CACHE::btb_replacement_final_stats;
-        (ooo_cpu[i].BTB.*(ooo_cpu[i].BTB.initialize_replacement))();
+        (ooo_cpu[i].BTB.*(ooo_cpu[i].BTB.initialize_replacement))(); //成员函数指针的调用
+        
+        /*等价于 来自gpt-o1
+        auto& itlb = ooo_cpu[i].ITLB;
+
+        // 获取 initialize_replacement 成员函数指针
+        auto func_ptr = itlb.initialize_replacement;
+
+        // 调用 initialize_replacement 函数
+        (itlb.*func_ptr)();
+        */
 
         // TLBs
         ooo_cpu[i].ITLB.cpu = i;
         ooo_cpu[i].ITLB.cache_type = IS_ITLB;
 	ooo_cpu[i].ITLB.MAX_READ = 2;
         ooo_cpu[i].ITLB.fill_level = FILL_L1;
-        ooo_cpu[i].ITLB.extra_interface = &ooo_cpu[i].L1I;
-        ooo_cpu[i].ITLB.lower_level = &ooo_cpu[i].STLB; 
+        ooo_cpu[i].ITLB.extra_interface = &ooo_cpu[i].L1I; //TLB和cache交互
+        ooo_cpu[i].ITLB.lower_level = &ooo_cpu[i].STLB;  //二级TLB
         ooo_cpu[i].ITLB.itlb_prefetcher_initialize();
 	
 	ooo_cpu[i].ITLB.initialize_replacement = &CACHE::itlb_initialize_replacement;
 	ooo_cpu[i].ITLB.update_replacement_state = &CACHE::itlb_update_replacement_state;
 	ooo_cpu[i].ITLB.find_victim = &CACHE::itlb_find_victim;
 	ooo_cpu[i].ITLB.replacement_final_stats = &CACHE::itlb_replacement_final_stats;
-	(ooo_cpu[i].ITLB.*(ooo_cpu[i].ITLB.initialize_replacement))();
+	(ooo_cpu[i].ITLB.*(ooo_cpu[i].ITLB.initialize_replacement))(); //???
 
         ooo_cpu[i].DTLB.cpu = i;
         ooo_cpu[i].DTLB.cache_type = IS_DTLB;
-        ooo_cpu[i].DTLB.MAX_READ = (2 > MAX_READ_PER_CYCLE) ? MAX_READ_PER_CYCLE : 2;
+        ooo_cpu[i].DTLB.MAX_READ = (2 > MAX_READ_PER_CYCLE) ? MAX_READ_PER_CYCLE : 2; //？
         ooo_cpu[i].DTLB.fill_level = FILL_L1;
         ooo_cpu[i].DTLB.extra_interface = &ooo_cpu[i].L1D;
         ooo_cpu[i].DTLB.lower_level = &ooo_cpu[i].STLB;
         ooo_cpu[i].DTLB.dtlb_prefetcher_initialize();
 
-	#ifdef PUSH_DTLB_PB
+	#ifdef PUSH_DTLB_PB //预取缓冲 ？？？
 	ooo_cpu[i].DTLB_PB.cpu = i;
 	ooo_cpu[i].DTLB_PB.cache_type = IS_DTLB_PB;
 	ooo_cpu[i].DTLB_PB.fill_level = FILL_L1;
@@ -1387,6 +1400,18 @@ int main(int argc, char** argv)
     start_time = time(NULL);
     uint8_t run_simulation = 1;
     int cs_index = 0;
+    Stats stats;
+    size_t dash_pos = input1.find('-');
+    size_t dot_pos = input1.find('.', dash_pos);
+    std::string folder_name = input1.substr(dash_pos + 1, dot_pos - dash_pos - 1);
+
+    size_t last_slash = input1.find_last_of('/');
+    size_t dash_pos2= input1.find('-', last_slash);
+    std::string bench_name = input1.substr(last_slash + 1, dash_pos2 - last_slash - 1);
+
+    std::string input2 = argv[0];
+    std::string predictor_name = input2.substr(input2.find_last_of('/') + 1, input2.find('-') - input2.find_last_of('/') - 1);
+
     while (run_simulation) {
 
         uint64_t elapsed_second = (uint64_t)(time(NULL) - start_time),
@@ -1407,95 +1432,95 @@ int main(int argc, char** argv)
 #ifdef CAPTURE_DYNAMIC_ENERGY_PROFILE
 	    if(warmup_complete[i] && current_core_cycle[i] % PHASE_SIZE_IN_CYCLES == 0)
 	    {
-		//Listing the variables I need: 
-		//L1I: rq_to_cache, rq_merged, prefetch_miss, load_miss, pq_to_cache. 
-		cache_data_tag_accesses[0][phase_id] = 0.2907293 * (ooo_cpu[i].L1I.RQ.TO_CACHE + ooo_cpu[i].L1I.RQ.MERGED + ooo_cpu[i].L1I.sim_miss[i][2]);  
-		cache_tag_accesses[0][phase_id] = 0.00244234 * (ooo_cpu[i].L1I.PQ.TO_CACHE + ooo_cpu[i].L1I.sim_miss[i][0]); 
+            //Listing the variables I need: 
+            //L1I: rq_to_cache, rq_merged, prefetch_miss, load_miss, pq_to_cache. 
+            cache_data_tag_accesses[0][phase_id] = 0.2907293 * (ooo_cpu[i].L1I.RQ.TO_CACHE + ooo_cpu[i].L1I.RQ.MERGED + ooo_cpu[i].L1I.sim_miss[i][2]);  
+            cache_tag_accesses[0][phase_id] = 0.00244234 * (ooo_cpu[i].L1I.PQ.TO_CACHE + ooo_cpu[i].L1I.sim_miss[i][0]); 
 
-		//L1D: rq_to_cache, rq_merged, prefetch_miss, wq_to_cache, load_miss, pq_to_cache, rfo_cache
-		cache_data_tag_accesses[1][phase_id] = 0.4359786 * (ooo_cpu[i].L1D.RQ.TO_CACHE + ooo_cpu[i].L1D.RQ.MERGED + ooo_cpu[i].L1D.sim_miss[i][2] + ooo_cpu[i].L1D.WQ.TO_CACHE);
-		cache_tag_accesses[1][phase_id] = 0.00556264 * (ooo_cpu[i].L1D.PQ.TO_CACHE + ooo_cpu[i].L1D.sim_miss[i][0] + ooo_cpu[i].L1D.sim_miss[i][1]);
+            //L1D: rq_to_cache, rq_merged, prefetch_miss, wq_to_cache, load_miss, pq_to_cache, rfo_cache
+            cache_data_tag_accesses[1][phase_id] = 0.4359786 * (ooo_cpu[i].L1D.RQ.TO_CACHE + ooo_cpu[i].L1D.RQ.MERGED + ooo_cpu[i].L1D.sim_miss[i][2] + ooo_cpu[i].L1D.WQ.TO_CACHE);
+            cache_tag_accesses[1][phase_id] = 0.00556264 * (ooo_cpu[i].L1D.PQ.TO_CACHE + ooo_cpu[i].L1D.sim_miss[i][0] + ooo_cpu[i].L1D.sim_miss[i][1]);
 
-		//L2C: rq_to_cache, prefetch_miss, wq_to_cache, total_miss, pq_to_cache
-		cache_data_tag_accesses[2][phase_id] = 0.4349426 * (ooo_cpu[i].L2C.RQ.TO_CACHE + ooo_cpu[i].L2C.sim_miss[i][2] + ooo_cpu[i].L2C.WQ.TO_CACHE + ooo_cpu[i].L2C.PQ.TO_CACHE);
+            //L2C: rq_to_cache, prefetch_miss, wq_to_cache, total_miss, pq_to_cache
+            cache_data_tag_accesses[2][phase_id] = 0.4349426 * (ooo_cpu[i].L2C.RQ.TO_CACHE + ooo_cpu[i].L2C.sim_miss[i][2] + ooo_cpu[i].L2C.WQ.TO_CACHE + ooo_cpu[i].L2C.PQ.TO_CACHE);
 
-		uint64_t l2c_total_miss = 0;
-		for (uint32_t j=0; j<NUM_TYPES; j++) {
-        		l2c_total_miss += ooo_cpu[i].L2C.sim_miss[i][j];
-	        }
-
-
-		cache_tag_accesses[2][phase_id] = 0.00909169 * l2c_total_miss;
-
-		
-		//LLC: rq_to_cache, prefetch_miss, wq_to_cache, total_miss, pq_to_cache
-		
-		cache_data_tag_accesses[3][phase_id] = 0.8522517 * (uncore.LLC.RQ.TO_CACHE + uncore.LLC.sim_miss[i][2] + uncore.LLC.WQ.TO_CACHE + uncore.LLC.PQ.TO_CACHE);
-
-		uint64_t total_miss = 0;
-		for (uint32_t j=0; j<NUM_TYPES; j++) {
-			total_miss += uncore.LLC.sim_miss[i][j];
-		}
-
-		cache_tag_accesses[3][phase_id] = 0.0229417 * total_miss;
-		
-		//DRAM: RQ/WQ row_buffer_hits/misses	NOTE: CAPTURING ONLY FOR CHANNEL 0, BASED ON CURRENT CONFIGURATION. 
-		dram_accesses[phase_id] = 10.24 * (uncore.DRAM.RQ[0].ROW_BUFFER_HIT + uncore.DRAM.RQ[0].ROW_BUFFER_MISS + uncore.DRAM.WQ[0].ROW_BUFFER_HIT + uncore.DRAM.WQ[0].ROW_BUFFER_MISS);  
-		//Prefetcher: 
-
-		//Bingo: 
-
-		//IPCP: 
-		#ifdef IPCP_PREFETCHER 
-		ip_table_read[phase_id] = ip_table_read_accesses * 0.00084576;
-		ip_table_tag_read[phase_id] = ip_table_tag_read_accesses * 0.000423324;
-		ip_table_write[phase_id] = ip_table_write_accesses * 0.000659022;
-		ip_table_tag_write[phase_id] = ip_table_tag_write_accesses * 0.000352568; 
-		cspt_write[phase_id] = cspt_write_accesses * 0.000294389;
-		cspt_read[phase_id] = cspt_read_accesses * 0.000275815; 
-		rstable_read[phase_id] = rstable_read_accesses * 0.00236372;
-		rstable_write[phase_id] = rstable_write_accesses * 0.00245553;
-		rrfilter_read[phase_id] = rrfilter_read_accesses * 0.00188962;
-		rrfilter_tag_write[phase_id] = rrfilter_tag_write_accesses * 0.00184435;
-		
-		#endif	
-
-		//ITLB: rq_to_cache, rq_merged, total_miss
-
-		cache_data_tag_accesses[4][phase_id] = 0.001027806 * (ooo_cpu[i].ITLB.RQ.TO_CACHE + ooo_cpu[i].ITLB.RQ.MERGED);
-
-		total_miss = 0;
-		for (uint32_t j=0; j<NUM_TYPES; j++) {
-			total_miss += ooo_cpu[i].ITLB.sim_miss[i][j];
-		}
-		cache_tag_accesses[4][phase_id] = 0.000564828 * total_miss;
-
-		//DTLB: rq_to_cache, rq_merged, load_miss
-
-		cache_data_tag_accesses[5][phase_id] = 0.001027806 * (ooo_cpu[i].DTLB.RQ.TO_CACHE + ooo_cpu[i].DTLB.RQ.MERGED); 
-
-		cache_tag_accesses[5][phase_id] = 0.000564828 * ooo_cpu[i].DTLB.sim_miss[i][0];
-
-		//STLB: rq_to_cache, rq_merged, total_miss
-		cache_data_tag_accesses[6][phase_id] = 0.01775155 * (ooo_cpu[i].STLB.RQ.TO_CACHE + ooo_cpu[i].STLB.RQ.MERGED);
-
-                total_miss = 0;
-                for (uint32_t j=0; j<NUM_TYPES; j++) {
-                        total_miss += ooo_cpu[i].STLB.sim_miss[i][j];
+            uint64_t l2c_total_miss = 0;
+            for (uint32_t j=0; j<NUM_TYPES; j++) {
+                    l2c_total_miss += ooo_cpu[i].L2C.sim_miss[i][j];
                 }
-                cache_tag_accesses[6][phase_id] = 0.00809473 * total_miss;	
 
-		//Interconnect: llc_accesses, llc_writebacks, l2c_misses
-		uint64_t llc_total_access = 0; 
-		for (uint32_t j=0; j<NUM_TYPES; j++) {
-			llc_total_access += uncore.LLC.sim_access[i][j];
-		}
 
-		interconnect_request[phase_id] = 1 * 0.8 * llc_total_access;
+            cache_tag_accesses[2][phase_id] = 0.00909169 * l2c_total_miss;
 
-		interconnect_response[phase_id] = 8 * 0.8 * (uncore.LLC.sim_access[i][3] + l2c_total_miss);
-		
-		phase_id++;
+            
+            //LLC: rq_to_cache, prefetch_miss, wq_to_cache, total_miss, pq_to_cache
+            
+            cache_data_tag_accesses[3][phase_id] = 0.8522517 * (uncore.LLC.RQ.TO_CACHE + uncore.LLC.sim_miss[i][2] + uncore.LLC.WQ.TO_CACHE + uncore.LLC.PQ.TO_CACHE);
+
+            uint64_t total_miss = 0;
+            for (uint32_t j=0; j<NUM_TYPES; j++) {
+                total_miss += uncore.LLC.sim_miss[i][j];
+            }
+
+            cache_tag_accesses[3][phase_id] = 0.0229417 * total_miss;
+            
+            //DRAM: RQ/WQ row_buffer_hits/misses	NOTE: CAPTURING ONLY FOR CHANNEL 0, BASED ON CURRENT CONFIGURATION. 
+            dram_accesses[phase_id] = 10.24 * (uncore.DRAM.RQ[0].ROW_BUFFER_HIT + uncore.DRAM.RQ[0].ROW_BUFFER_MISS + uncore.DRAM.WQ[0].ROW_BUFFER_HIT + uncore.DRAM.WQ[0].ROW_BUFFER_MISS);  
+            //Prefetcher: 
+
+            //Bingo: 
+
+            //IPCP: 
+            #ifdef IPCP_PREFETCHER 
+            ip_table_read[phase_id] = ip_table_read_accesses * 0.00084576;
+            ip_table_tag_read[phase_id] = ip_table_tag_read_accesses * 0.000423324;
+            ip_table_write[phase_id] = ip_table_write_accesses * 0.000659022;
+            ip_table_tag_write[phase_id] = ip_table_tag_write_accesses * 0.000352568; 
+            cspt_write[phase_id] = cspt_write_accesses * 0.000294389;
+            cspt_read[phase_id] = cspt_read_accesses * 0.000275815; 
+            rstable_read[phase_id] = rstable_read_accesses * 0.00236372;
+            rstable_write[phase_id] = rstable_write_accesses * 0.00245553;
+            rrfilter_read[phase_id] = rrfilter_read_accesses * 0.00188962;
+            rrfilter_tag_write[phase_id] = rrfilter_tag_write_accesses * 0.00184435;
+            
+            #endif	
+
+            //ITLB: rq_to_cache, rq_merged, total_miss
+
+            cache_data_tag_accesses[4][phase_id] = 0.001027806 * (ooo_cpu[i].ITLB.RQ.TO_CACHE + ooo_cpu[i].ITLB.RQ.MERGED);
+
+            total_miss = 0;
+            for (uint32_t j=0; j<NUM_TYPES; j++) {
+                total_miss += ooo_cpu[i].ITLB.sim_miss[i][j];
+            }
+            cache_tag_accesses[4][phase_id] = 0.000564828 * total_miss;
+
+            //DTLB: rq_to_cache, rq_merged, load_miss
+
+            cache_data_tag_accesses[5][phase_id] = 0.001027806 * (ooo_cpu[i].DTLB.RQ.TO_CACHE + ooo_cpu[i].DTLB.RQ.MERGED); 
+
+            cache_tag_accesses[5][phase_id] = 0.000564828 * ooo_cpu[i].DTLB.sim_miss[i][0];
+
+            //STLB: rq_to_cache, rq_merged, total_miss
+            cache_data_tag_accesses[6][phase_id] = 0.01775155 * (ooo_cpu[i].STLB.RQ.TO_CACHE + ooo_cpu[i].STLB.RQ.MERGED);
+
+                    total_miss = 0;
+                    for (uint32_t j=0; j<NUM_TYPES; j++) {
+                            total_miss += ooo_cpu[i].STLB.sim_miss[i][j];
+                    }
+                    cache_tag_accesses[6][phase_id] = 0.00809473 * total_miss;	
+
+            //Interconnect: llc_accesses, llc_writebacks, l2c_misses
+            uint64_t llc_total_access = 0; 
+            for (uint32_t j=0; j<NUM_TYPES; j++) {
+                llc_total_access += uncore.LLC.sim_access[i][j];
+            }
+
+            interconnect_request[phase_id] = 1 * 0.8 * llc_total_access;
+
+            interconnect_response[phase_id] = 8 * 0.8 * (uncore.LLC.sim_access[i][3] + l2c_total_miss);
+            
+            phase_id++;
 	    }
 #endif
 
@@ -1581,9 +1606,10 @@ int main(int argc, char** argv)
 		ooo_cpu[i].fetch_instruction();
 
 		//Neelu: Checking IFETCH Buffer occupancy as now instructions won't be added directly to ROB. 
+        // 现在改为通过 IFETCH_BUFFER 缓冲后，再逐步转移到 ROB。这可能是为了分离取指和解码阶段，模拟更真实的处理器流水线行为。
         if ((ooo_cpu[i].IFETCH_BUFFER.occupancy < ooo_cpu[i].IFETCH_BUFFER.SIZE) && (ooo_cpu[i].fetch_stall == 0))
         {
-            ooo_cpu[i].read_from_trace();
+            ooo_cpu[i].read_from_trace(stats);
         }
 
 
@@ -1721,6 +1747,13 @@ int main(int argc, char** argv)
         uncore.LLC.operate();
         uncore.DRAM.operate();
     }
+
+    std::string output_dir = "output/"+predictor_name+"/"+bench_name+"/";
+    std::string output_file = output_dir + folder_name+".csv";
+
+    stats.dump(output_file.c_str());
+
+
 
     uint64_t elapsed_second = (uint64_t)(time(NULL) - start_time),
              elapsed_minute = elapsed_second / 60,

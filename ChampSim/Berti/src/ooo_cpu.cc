@@ -48,7 +48,7 @@ void O3_CPU::initialize_core()
 }
 
 
-void O3_CPU::read_from_trace()
+void O3_CPU::read_from_trace(Stats& stats) //added
 {
     // actual processors do not work like this but for easier implementation,
     // we read instruction traces and virtually add them in the ROB
@@ -64,7 +64,7 @@ void O3_CPU::read_from_trace()
         size_t instr_size = knob_cloudsuite ? sizeof(cloudsuite_instr) : sizeof(input_instr);
 	
         if (knob_cloudsuite) {
-        
+   
             if (!fread(&current_cloudsuite_instr, instr_size, 1, trace_file)) {
                 // reached end of file for this trace
                 //cout << "*** Reached end of trace for Core: " << cpu << " Repeating trace: " << trace_string << endl; 
@@ -160,8 +160,8 @@ void O3_CPU::read_from_trace()
 			num_reads++;
 							                      // handle branch prediction
 
-			if (IFETCH_BUFFER.entry[ifetch_buffer_index].is_branch) {
-				DP( if (warmup_complete[cpu]) {
+			if (IFETCH_BUFFER.entry[ifetch_buffer_index].is_branch) { 
+				DP( if (warmup_complete[cpu]) { 
 						cout << "[BRANCH] instr_id: " << instr_unique_id << " ip: " << hex << arch_instr.ip << dec << " taken: " << +arch_instr.branch_taken << endl; });
 
 			
@@ -190,7 +190,8 @@ void O3_CPU::read_from_trace()
 					}
 				}
 
-			last_branch_result(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken);
+			last_branch_result(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_target,
+                        IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken,IFETCH_BUFFER.entry[ifetch_buffer_index].branch_type);
 			}
 
 
@@ -204,7 +205,7 @@ void O3_CPU::read_from_trace()
                 }
                 instr_unique_id++;
             }
-        }
+    }
 	else
 	  {
 	  	//DP( if (warmup_complete[cpu]) {
@@ -252,7 +253,7 @@ void O3_CPU::read_from_trace()
                 arch_instr.is_branch = current_instr.is_branch;
                 arch_instr.branch_taken = current_instr.branch_taken;
 
-                arch_instr.asid[0] = cpu;
+                arch_instr.asid[0] = cpu; // 默认0
                 arch_instr.asid[1] = cpu;
 
 		bool reads_sp = false;
@@ -348,8 +349,8 @@ void O3_CPU::read_from_trace()
 		{
 			// direct call
 			arch_instr.is_branch = 1;
-    			arch_instr.branch_taken = 1;
-    			arch_instr.branch_type = BRANCH_DIRECT_CALL;
+    		arch_instr.branch_taken = 1;
+    		arch_instr.branch_type = BRANCH_DIRECT_CALL;
 
   		}
                 else if(reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && reads_other)
@@ -373,8 +374,11 @@ void O3_CPU::read_from_trace()
 			arch_instr.branch_taken = arch_instr.branch_taken; // don't change this
 			arch_instr.branch_type = BRANCH_OTHER;
 		}
-
 		total_branch_types[arch_instr.branch_type]++;
+
+        // if(arch_instr.branch_type == BRANCH_CONDITIONAL){
+        //     cout<<"111"<<endl;
+        // }
 
 		if((arch_instr.is_branch == 1) && (arch_instr.branch_taken == 1))
 		{
@@ -392,19 +396,50 @@ void O3_CPU::read_from_trace()
 	 		// handle branch prediction
 
 			if (IFETCH_BUFFER.entry[ifetch_buffer_index].is_branch) {
-
-				DP( if (warmup_complete[cpu]) {
-				cout << "[BRANCH] instr_id: " << instr_unique_id << " ip: " << hex << arch_instr.ip << dec << " taken: " << +arch_instr.branch_taken << endl; });
-							                        num_branch++;
 			// handle branch prediction & branch predictor update
-			uint8_t branch_prediction = predict_branch(IFETCH_BUFFER.entry[ifetch_buffer_index].ip);
-			uint64_t predicted_branch_target = IFETCH_BUFFER.entry[ifetch_buffer_index].branch_target;
-			if(branch_prediction == 0)
-			{
-				predicted_branch_target = 0;
-			}
-									                        // call code prefetcher every time the branch predictor is used
-			l1i_prefetcher_branch_operate(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_type, predicted_branch_target);
+            if(IFETCH_BUFFER.entry[ifetch_buffer_index].branch_type==BRANCH_CONDITIONAL){ //modified 只有条件分支才进行判断和更新
+
+                num_branch++;
+                uint8_t branch_prediction = predict_branch(IFETCH_BUFFER.entry[ifetch_buffer_index].ip);
+                uint64_t predicted_branch_target = IFETCH_BUFFER.entry[ifetch_buffer_index].branch_target;
+                if(branch_prediction == 0)
+                {
+                    predicted_branch_target = 0;
+                }
+                                                                // call code prefetcher every time the branch predictor is used
+                l1i_prefetcher_branch_operate(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_type, predicted_branch_target);
+                if(IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken != branch_prediction)
+                {
+                    branch_mispredictions++;
+                    total_rob_occupancy_at_branch_mispredict += ROB.occupancy;
+                    if(warmup_complete[cpu])
+                    {
+                        fetch_stall = 1;
+                        instrs_to_read_this_cycle = 0;
+                        IFETCH_BUFFER.entry[ifetch_buffer_index].branch_mispredicted = 1;
+                    }
+                }
+                else
+                {
+                    // correct prediction
+
+                    if(branch_prediction == 1)
+                    {
+                        // if correctly predicted taken, then we can't fetch anymore instructions this cycle
+                        instrs_to_read_this_cycle = 0;
+                    }
+                }
+                //cout<<"222"<<endl;
+			    last_branch_result(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_target,
+                         IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken,IFETCH_BUFFER.entry[ifetch_buffer_index].branch_type);
+
+                if(warmup_complete[cpu]){ // 预热结束才进行统计！找了半天bug
+                     stats.update(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, branch_prediction,IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken);
+                }
+               
+            }
+
+
 
 
 #ifndef PERFECT_BTB
@@ -460,33 +495,7 @@ void O3_CPU::read_from_trace()
 #endif
 
 
-
-
-
-			if(IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken != branch_prediction)
-			{
-				branch_mispredictions++;
-				total_rob_occupancy_at_branch_mispredict += ROB.occupancy;
-				if(warmup_complete[cpu])
-				{
-					fetch_stall = 1;
-					instrs_to_read_this_cycle = 0;
-					IFETCH_BUFFER.entry[ifetch_buffer_index].branch_mispredicted = 1;
-				}
-			}
-			else
-			{
-				// correct prediction
-
-				if(branch_prediction == 1)
-				{
-					// if correctly predicted taken, then we can't fetch anymore instructions this cycle
-					instrs_to_read_this_cycle = 0;
-				}
-			}
-
-			last_branch_result(IFETCH_BUFFER.entry[ifetch_buffer_index].ip, IFETCH_BUFFER.entry[ifetch_buffer_index].branch_taken);
-			}
+		}
 
 
 

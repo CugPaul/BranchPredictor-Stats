@@ -18,7 +18,7 @@ if [ $? -ne 0 ]; then
     exit
 fi
 
-# Extract gcc
+# Extract gcc 解压
 tar -xf gcc.tar.xz
 if [ $? -ne 0 ]; then
     echo " ${RED}ERROR${NC}"

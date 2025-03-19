@@ -367,7 +367,8 @@ void print_sim_stats(uint32_t cpu, CACHE *cache)
 void print_branch_stats()
 {
     for (uint32_t i=0; i<NUM_CPUS; i++) {
-        cout << endl << "CPU " << i << " Branch Prediction Accuracy: ";
+        cout << endl << "CPU " << i << " Branch Prediction Accuracy: "; // num_branch是所有分支都算在内了 但好像并不是想要这样
+
         cout << (100.0*(ooo_cpu[i].num_branch - ooo_cpu[i].branch_mispredictions)) / ooo_cpu[i].num_branch;
         cout << "% MPKI: " << (1000.0*ooo_cpu[i].branch_mispredictions)/(ooo_cpu[i].num_retired - ooo_cpu[i].warmup_instructions);
 	cout << " Average ROB Occupancy at Mispredict: " << (1.0*ooo_cpu[i].total_rob_occupancy_at_branch_mispredict)/ooo_cpu[i].branch_mispredictions << endl;
@@ -1541,8 +1542,8 @@ int main(int argc, char** argv)
 
 		// retire
 		// Neelu: Commented first condition. 
-                if (/*(ooo_cpu[i].ROB.entry[ooo_cpu[i].ROB.head].executed == COMPLETED) && */ (ooo_cpu[i].ROB.entry[ooo_cpu[i].ROB.head].event_cycle <= current_core_cycle[i]))
-			ooo_cpu[i].retire_rob();
+            if (/*(ooo_cpu[i].ROB.entry[ooo_cpu[i].ROB.head].executed == COMPLETED) && */ (ooo_cpu[i].ROB.entry[ooo_cpu[i].ROB.head].event_cycle <= current_core_cycle[i]))
+                ooo_cpu[i].retire_rob();
 
 		// complete 
                 ooo_cpu[i].update_rob();
@@ -1550,17 +1551,17 @@ int main(int argc, char** argv)
                 // schedule (including decode latency)
                 uint32_t schedule_index = ooo_cpu[i].ROB.next_schedule;
                 if ((ooo_cpu[i].ROB.entry[schedule_index].scheduled == 0) && (ooo_cpu[i].ROB.entry[schedule_index].event_cycle <= current_core_cycle[i]))
-                    ooo_cpu[i].schedule_instruction();
+                    ooo_cpu[i].schedule_instruction(); //放到ROB中 准备执行（时间是唤醒和仲裁的这些时间） 放到要执行的队列
 
                 // execute
-                ooo_cpu[i].execute_instruction();
+                ooo_cpu[i].execute_instruction(); //从执行的队列中并行执行EXEC_WIDTH个 
 
 				ooo_cpu[i].update_rob();
 
                 // memory operation
-                ooo_cpu[i].schedule_memory_instruction();
+                ooo_cpu[i].schedule_memory_instruction(); //准备执行（时间是唤醒和仲裁的这些时间） 放到要执行的队列
                 ooo_cpu[i].execute_memory_instruction();
-
+.
 				ooo_cpu[i].update_rob();
 
 		//decode
@@ -1570,12 +1571,12 @@ int main(int argc, char** argv)
 		}
 
 		//fetch
-		ooo_cpu[i].fetch_instruction();
+		ooo_cpu[i].fetch_instruction(); //从ICACHE获取指令
 
 		//Neelu: Checking IFETCH Buffer occupancy as now instructions won't be added directly to ROB. 
         if ((ooo_cpu[i].IFETCH_BUFFER.occupancy < ooo_cpu[i].IFETCH_BUFFER.SIZE) && (ooo_cpu[i].fetch_stall == 0))
         {
-            ooo_cpu[i].read_from_trace();
+            ooo_cpu[i].read_from_trace(); 
         }
 
 
@@ -1664,7 +1665,8 @@ int main(int argc, char** argv)
             
             // simulation complete
           
-	    if(((all_warmup_complete > NUM_CPUS) && (simulation_complete[i] == 0) && (ooo_cpu[i].num_retired >= (ooo_cpu[i].begin_sim_instr + ooo_cpu[i].simulation_instructions)))) {
+	    if(((all_warmup_complete > NUM_CPUS) && (simulation_complete[i] == 0) && (ooo_cpu[i].num_retired >= (ooo_cpu[i].begin_sim_instr + ooo_cpu[i].simulation_instructions)))) 
+        {
 	    	simulation_complete[i] = 1;
                 if(all_warmup_complete > NUM_CPUS)
 			ooo_cpu[i].finish_sim_instr = ooo_cpu[i].num_retired - ooo_cpu[i].begin_sim_instr;
@@ -1702,7 +1704,7 @@ int main(int argc, char** argv)
 		record_roi_stats(i, &ooo_cpu[i].PTW.PSCL2);
 
                 all_simulation_complete++;
-            }
+          }
 
             if (all_simulation_complete == NUM_CPUS)
                 run_simulation = 0;
