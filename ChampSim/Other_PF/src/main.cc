@@ -1561,7 +1561,6 @@ int main(int argc, char** argv)
                 // memory operation
                 ooo_cpu[i].schedule_memory_instruction(); //准备执行（时间是唤醒和仲裁的这些时间） 放到要执行的队列
                 ooo_cpu[i].execute_memory_instruction();
-.
 				ooo_cpu[i].update_rob();
 
 		//decode
