@@ -8,7 +8,6 @@
 #include <sstream>
 
 #define PHASE_SIZE_IN_CYCLES 100000
-
 uint64_t phase_id = 0;
 
 //#define CAPTURE_DYNAMIC_ENERGY_PROFILE
