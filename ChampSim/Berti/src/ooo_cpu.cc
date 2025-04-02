@@ -2425,7 +2425,8 @@ void O3_CPU::complete_data_fetch(PACKET_QUEUE *queue, uint8_t is_it_tlb)
             RTS1_tail++;
             if (RTS1_tail == SQ_SIZE)
                 RTS1_tail = 0;
-
+            //修改测试
+            
             //DP (if (warmup_complete[cpu]) {
             //cout << "[ROB] " << __func__ << " RFO instr_id: " << SQ.entry[sq_index].instr_id;
             //cout << " DTLB_FETCH_DONE translation: " << +SQ.entry[sq_index].translated << hex << " page: " << (SQ.entry[sq_index].physical_address>>LOG2_PAGE_SIZE);
