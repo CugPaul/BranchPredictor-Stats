@@ -35,7 +35,7 @@ TRACES_GAP="traces/gap"
 TRACES_CS="traces/cs"
 OUT_BASE="output"
 OUT="output"
-LOG=$(pwd)/stderr.log
+LOG=$(pwd)/stderr.log #$LOG表示取变量的值
 
 ################################################################################
 #                                Terminal Colors                             #
@@ -179,7 +179,7 @@ print_help ()
 #                                Parse Options                               #
 ################################################################################
 
-while getopts :mfvlrcdhngp: opt; do
+while getopts :mfvlrcdhngp: opt; do #可以带mfvlrcdhngp这些参数中任意一个或者n个 当带-p时候后面还需要加一个参数（线程数量）
     case "${opt}" in
           v) VERBOSE="Y"
               echo -e "\033[1mVerbose Mode\033[0m"
@@ -233,11 +233,11 @@ echo ""
 if [[ "$GCC" == "Y" ]]; then
     echo -n "Building GCC 7.5 from scratch..."
 
-    if [[ "$VERBOSE" == "Y" ]]; then
+    if [[ "$VERBOSE" == "Y" ]]; then # 详细模式
         ./compile_gcc.sh $PARALLEL $NUM_THREAD
-    elif [[ "$LOGGED" == "Y" ]]; then
+    elif [[ "$LOGGED" == "Y" ]]; then # 日志模式 
         ./compile_gcc.sh $PARALLEL $NUM_THREAD >> $LOG 2>&1
-    else
+    else #啥也没有模式
         ./compile_gcc.sh $PARALLEL $NUM_THREAD >/dev/null 2>&1
     fi
 
@@ -262,7 +262,7 @@ fi
 #----------------------------------------------------------------------------#
 #                                Build ChampSim                              #
 #----------------------------------------------------------------------------#
-if [[ "$BUILD" == "Y" ]]; then
+if [ "$BUILD" == "Y" ]; then
     if [[ "$LOGGED" == "Y" ]]; then
         echo "Building" >> $LOG
         echo "============================================================" >> $LOG
@@ -359,7 +359,7 @@ fi
 #----------------------------------------------------------------------------#
 #                                Running Simulations                         #
 #----------------------------------------------------------------------------#
-mkdir $OUT > /dev/null 2>&1
+mkdir $OUT > /dev/null 2>&1 #反正就是丢弃输入输出
 
 if [[ "$LOGGED" == "Y" ]]; then
     echo "RUNNING" >> $LOG
@@ -373,8 +373,8 @@ echo -n "" > tmp_par.out
 
 for i in $(ls $BERTI/bin/*1core*); do
     if [[ "$LOGGED" == "Y" ]]; then
-        echo "$BERTI/bin/$i" >> $LOG
-        strings -a $BERTI/bin/$i | grep "GCC: " >> $LOG 2>&1
+        echo "$i" >> $LOG
+        strings -a $i | grep "GCC: " >> $LOG 2>&1 #错误也追加到输出 本身输出只有1
     fi
     name=$(echo $i | rev | cut -d/ -f1 | rev)
 
