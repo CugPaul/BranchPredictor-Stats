@@ -10,6 +10,7 @@ Microarchitecture_ (MICRO-55), October 2022.
 
 ## Modifications
 We use several branch statistics scripts to analyze the per-branch distribution of branch prediction in ChampSim, implementing the approach with reference to BranchNet scripts.
+
 **The statistics are collected by executing the run2.sh script.**
 
 
