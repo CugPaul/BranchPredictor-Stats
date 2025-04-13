@@ -1,4 +1,4 @@
-# Berti-Artifact
+# Berti-Artifact-MispredictStats
 [![DOI](https://zenodo.org/badge/518392799.svg)](https://zenodo.org/badge/latestdoi/518392799)
 
 Artifact used to evaluate the Berti prefetcher presented in the following paper:
